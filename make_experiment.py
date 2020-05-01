@@ -1,3 +1,19 @@
+# make_experiment.py - Sets up experiements for the genetic algorithm
+# Copyright (C) 2020  Nicklas Carpenter
+
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import configparser
 import argparse
 import os
@@ -10,22 +26,21 @@ parser = argparse.ArgumentParser()
 specifies_number_of_tests = parser.add_mutually_exclusive_group()
 
 specifies_number_of_tests.add_argument(
-                                        "-s", 
-                                        "--make-statistical-plot",
-                                        action = "store",
-                                        type = int,
-                                        default = -1)
+    "-s", 
+    "--make-statistical-plot",
+    action = "store",
+    type = int,
+    default = -1)
+
 specifies_number_of_tests.add_argument(
-                                        "-n", 
-                                        "--number-of-tests", 
-                                        action = "store", 
-                                        type = int,
-                                        default = -1)
+    "-n", 
+    "--number-of-tests", 
+    action = "store", 
+    type = int,
+    default = -1)
 parser.add_argument("-d", "--use-defaults", action = "store_true")
 
 args = parser.parse_args()
-
-#### Create the experiement ####
 
 ### Name the experiment ###
 input_not_valid = True
@@ -41,7 +56,7 @@ while input_not_valid:
     except FileNotFoundError:
         print("Invalid filename", file = sys.stderr)
 
-### Determine number of tests to run###
+### Determine number of tests to run ###
 # Obtain this number from the appropriate arguments if present.
 # Otherwise, ask the user
 if args.number_of_tests > 0:
@@ -65,7 +80,7 @@ else:
 
 ### Generate the test configuration files ###
 
-## Build the argument string
+## Build the argument string ##
 arguments = "-t"
 if args.use_defaults:
     arguments += "-d "
@@ -75,14 +90,14 @@ elif args.number_of_tests > 0:
     arguments += "-n {0}".format(args.number_of_tests)
 
 
-## Run the generate_tests.py script
+## Run the generate_tests.py script ##
 try:
     subprocess.run("python generate_tests.py " + arguments)
 except subprocess.CalledProcessError:
     print("Error attempting to generate tests", file = sys.stderr)
     exit()
 
-### Build a runscript
+### Build a runscript ###
 try:
     runscript = open("run.py", mode = "w")
 except:

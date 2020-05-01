@@ -1,3 +1,19 @@
+# genetic_algorithm.py - Runs a user-modifiable genetic algorithm on bitstrings
+# Copyright (C) 2020  Nicklas Carpenter
+
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import math
 import csv
 import random
@@ -7,12 +23,12 @@ import probability
 
 from Bitstring import Bitstring
 
-# TODO: Consider Selection
+# TODO Consider Selection
 #   - Proportional to fitness
 #   - Proportional to average fitness
 #   - Proportional to rank (fitness = max - rank)
 
-# TODO: Consider step fitness function with cutoff
+# TODO Consider step fitness function with cutoff
 # Step-function cut-off
 
 FIELD_NAMES = ["generation", "max", "average", "min", "best"]
@@ -22,7 +38,7 @@ population = []
 def gene_comparative_fitness_func(genes):
     '''Function used to measure the fitness of a new generation'''
 
-    fitness = 0;
+    fitness = 0
 
     for i in range(len(genes)):
         if genes[i] == 1:
@@ -77,13 +93,13 @@ def get_average_fiteness():
 def make_generation_summary(writer, generation):
     '''Generate an statistics summary for the current bitstream generation'''
     
-    # TODO: Format for PEP8
+    # TODO Format for PEP8
     writer.writerow({
-                        "generation": generation,
-                        "max": population[0].get_current_fitness(),
-                        "average": get_average_fiteness(),
-                        "min": population[POPULATION_SIZE - 1].get_current_fitness(),
-                        "best": population[0].get_bitstring()
+        "generation": generation,
+        "max": population[0].get_current_fitness(),
+        "average": get_average_fiteness(),
+        "min": population[POPULATION_SIZE - 1].get_current_fitness(),
+        "best": population[0].get_bitstring()
     })
 
 
@@ -120,11 +136,11 @@ with open(args.config_file, mode='r', newline = '') as config_file :
     elif fitness_function == "GRADE_SQUARED":
         MAX_FITNESS = 1.0
     else:
-        exit() # TODO: Throw an error
+        exit() # TODO Throw an error
 
     CROSSOVER = config.getboolean("OPTIONS", "CROSSOVER")
     MUTATE = config.getboolean("OPTIONS", "MUTATE")
-    # TODO: Incorporate average fitness functionality
+    # TODO Incorporate average fitness functionality
     USE_AVERAGE_FITNESS = config.getboolean("OPTIONS", "USE_AVERAGE_FITNESS")
 
     ## Configure possibility of random elements in fitness ##
@@ -145,7 +161,7 @@ with open(args.config_file, mode='r', newline = '') as config_file :
             exit() # TODO: Throw an error
 
     ## Determine repopulation method ##
-    # TODO: Implement microbial genetic algorithm
+    # TODO Implement microbial genetic algorithm
     repopulation_method = config.read("PARAMETERS", "REPOPULATION_METHOD")
     if repopulation_method == "DEFAULT":
         pass
@@ -168,7 +184,7 @@ with open(OUTPUT_FILE, mode='w', newline = '') as summary_file:
 
     while (generation < MAX_GENERATIONS) \
            and (population[0].get_current_fitness() < MAX_FITNESS):
-        repopulate();
+        repopulate()
         population = sorted(population, key=fitness_comparator)
         make_generation_summary(writer, generation)
         generation += 1
