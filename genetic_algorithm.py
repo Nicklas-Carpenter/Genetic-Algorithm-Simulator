@@ -111,66 +111,66 @@ parser.add_argument("config_file")
 
 args = parser.parse_args()
 
-with open(args.config_file, mode='r', newline = '') as config_file :
-    config = configparser.ConfigParser()
-    config.read_file(config_file)
+config_file = open(args.config_file, mode='r', newline = '')
+config = configparser.ConfigParser()
+config.read_file(config_file)
 
-    ## Initialize parameters
-    MAX_GENERATIONS = config.getint("PARAMETERS", "MAX_GENERATIONS")
-    BITSTRING_SIZE = config.getint("PARAMETERS", "BITSTRING_SIZE")
-    REPOPULATION_RATIO = config.getfloat("PARAMETERS", "REPOPULATION_RATIO")
-    OUTPUT_FILE = config.get("PARAMETERS", "OUTPUT_FILE")
-    SEED = int(config.get("PARAMETERS", "SEED"), base = 16)
-    POPULATION_SIZE = config.getint("PARAMETERS", "POPULATION_SIZE")
+## Initialize parameters
+MAX_GENERATIONS = config.getint("PARAMETERS", "MAX_GENERATIONS")
+BITSTRING_SIZE = config.getint("PARAMETERS", "BITSTRING_SIZE")
+REPOPULATION_RATIO = config.getfloat("PARAMETERS", "REPOPULATION_RATIO")
+OUTPUT_FILE = config.get("PARAMETERS", "OUTPUT_FILE")
+SEED = int(config.get("PARAMETERS", "SEED"), base = 16)
+POPULATION_SIZE = config.getint("PARAMETERS", "POPULATION_SIZE")
 
-    ## Set up fitness function ##
-    PROBABALISTIC_FITNESS_FUNCTION = config.getboolean(
-        "OPTIONS",
-        "PROBABALISTIC_FITNESS_FUNCTION"
-    )
+## Set up fitness function ##
+PROBABALISTIC_FITNESS_FUNCTION = config.getboolean(
+    "OPTIONS",
+    "PROBABALISTIC_FITNESS_FUNCTION"
+)
 
-    fitness_function = config.get("PARAMETERS", "FITNESS_FUNCTION")
-    if fitness_function == "GENE_COMPARATIVE":
-        FITNESS_FUNCTION = gene_comparative_fitness_func
-        MAX_FITNESS = BITSTRING_SIZE
-    elif fitness_function == "GRADE_SQUARED":
-        MAX_FITNESS = 1.0
+fitness_function = config.get("PARAMETERS", "FITNESS_FUNCTION")
+if fitness_function == "GENE_COMPARATIVE":
+    FITNESS_FUNCTION = gene_comparative_fitness_func
+    MAX_FITNESS = BITSTRING_SIZE
+elif fitness_function == "GRADE_SQUARED":
+    MAX_FITNESS = 1.0
+else:
+    exit() # TODO Throw an error
+
+CROSSOVER = config.getboolean("OPTIONS", "CROSSOVER")
+MUTATE = config.getboolean("OPTIONS", "MUTATE")
+# TODO Incorporate average fitness functionality
+USE_AVERAGE_FITNESS = config.getboolean("OPTIONS", "USE_AVERAGE_FITNESS")
+
+## Configure possibility of random elements in fitness ##
+if config.getboolean("OPTIONS", "PROBABALISTIC_FITNESS_FUNCTION"):
+    distribution = config.get("PARAMETERS", "PROBABILITY_DISTRIBUTION")
+    if distribution == "UNIFORM":
+        a = config.getfloat("UNIFORM", "A")
+        b = config.getfloat("UNIFORM", "B")
+        NOISE = probability.create_uniform_generator(a, b)
+    elif distribution == "NORMAL":
+        lam = config.getfloat("EXPONENTIAL", "LAMBDA")
+        NOISE = probability.create_exponential_generator(lam)
+    elif distribution == "EXPONENTIAL":
+        mu = config.getfloat("GAUSS", "MU")
+        sigma = config.getfloat("GAUSS", "SIGMA")
+        NOISE = probability.create_gauss_generator(mu, sigma)
     else:
-        exit() # TODO Throw an error
+        exit() # TODO: Throw an error
 
-    CROSSOVER = config.getboolean("OPTIONS", "CROSSOVER")
-    MUTATE = config.getboolean("OPTIONS", "MUTATE")
-    # TODO Incorporate average fitness functionality
-    USE_AVERAGE_FITNESS = config.getboolean("OPTIONS", "USE_AVERAGE_FITNESS")
+## Determine repopulation method ##
+# TODO Implement microbial genetic algorithm
+repopulation_method = config.read("PARAMETERS", "REPOPULATION_METHOD")
+if repopulation_method == "DEFAULT":
+    pass
+elif repopulation_method == "MICROBIAL":
+    pass
+else:
+    pass
 
-    ## Configure possibility of random elements in fitness ##
-    if config.getboolean("OPTIONS", "PROBABALISTIC_FITNESS_FUNCTION"):
-        distribution = config.get("PARAMETERS", "PROBABILITY_DISTRIBUTION")
-        if distribution == "UNIFORM":
-            a = config.getfloat("UNIFORM", "A")
-            b = config.getfloat("UNIFORM", "B")
-            NOISE = probability.create_uniform_generator(a, b)
-        elif distribution == "NORMAL":
-            lam = config.getfloat("EXPONENTIAL", "LAMBDA")
-            NOISE = probability.create_exponential_generator(lam)
-        elif distribution == "EXPONENTIAL":
-            mu = config.getfloat("GAUSS", "MU")
-            sigma = config.getfloat("GAUSS", "SIGMA")
-            NOISE = probability.create_gauss_generator(mu, sigma)
-        else:
-            exit() # TODO: Throw an error
-
-    ## Determine repopulation method ##
-    # TODO Implement microbial genetic algorithm
-    repopulation_method = config.read("PARAMETERS", "REPOPULATION_METHOD")
-    if repopulation_method == "DEFAULT":
-        pass
-    elif repopulation_method == "MICROBIAL":
-        pass
-    else:
-        pass
-
-    config_file.close()
+config_file.close()
 
 ### Genetic Algorithm ### 
 random.seed(SEED)
@@ -178,14 +178,13 @@ generation = 0
 
 generate_initial_population()
 
-with open(OUTPUT_FILE, mode='w', newline = '') as summary_file:
-    writer = csv.DictWriter(summary_file, fieldnames=FIELD_NAMES)
-    writer.writeheader()
+summary_file = open(OUTPUT_FILE, mode = 'w', newline = '')
+writer = csv.DictWriter(summary_file, fieldnames=FIELD_NAMES)
+writer.writeheader()
 
-    while (generation < MAX_GENERATIONS) \
-           and (population[0].get_current_fitness() < MAX_FITNESS):
-        repopulate()
-        population = sorted(population, key=fitness_comparator)
-        make_generation_summary(writer, generation)
-        generation += 1
-    summary_file.close()
+while (generation < MAX_GENERATIONS) and (population[0].get_current_fitness() < MAX_FITNESS):
+    repopulate()
+    population = sorted(population, key=fitness_comparator)
+    make_generation_summary(writer, generation)
+    generation += 1
+summary_file.close()

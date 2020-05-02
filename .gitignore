@@ -1,0 +1,5 @@
+# Ignore IDE and editor configuration
+.vscode/
+
+# Ignore everything in the experiments directory
+experiments/

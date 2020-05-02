@@ -20,6 +20,20 @@ import os
 import sys
 import subprocess
 
+run_cmd = """\
+try:
+    subprocess.run('python genetic_algorithm.py {0}', check = True)
+execpt: subprocess.CalledProcessError:
+    print("Error running genetic_algorithm.py", file=sys.stderr)"""
+
+plot_cmd = """\
+try:
+    subprocess.run("python plot.py", check=True)
+except subprocess.CalledProcessError:
+    print("Error running plot.py", file=sys.stderr)"""
+
+# TODO Remove this after testing
+experiment_name = ""
 
 #### Parse arguments ####
 parser = argparse.ArgumentParser()
@@ -47,7 +61,7 @@ input_not_valid = True
 while input_not_valid:
     experiment_name = input("Experiment name: ")
     try:
-        os.mkdir(experiment_name)
+        os.mkdir("experiments/" + experiment_name)
         input_not_valid = False
     except FileExistsError:
         print(
@@ -111,16 +125,18 @@ except:
     print("Error opening list of files", file = sys.stderr)
 
 test_file = tests.readline()
-
-cmd = """\
-try:
-    subprocess.run('python genetic_algorithm.py {0}', check = True)
-execpt: subprocess.CalledProcessError:
-    print("Error running genetic_algorithm.py", file=sys.stderr)"""
-
 while len(test_file) > 0:
     runscript.write("# Running {0}".format(test_file))
-    runscript.write(cmd.format(test_file))
+    runscript.write(run_cmd.format(test_file))
+    test_file = tests.readline()
 
+runscript.write("\n" + plot_cmd)
+runscript.close()
 
-os.rmdir(experiment_name)
+### Generate plot script ###
+plot_script = open("plot.py", "w", newline='')
+plot_script.write("import matplotlib.pyplot as plt\nimport csv\nimport os")
+
+# TODO Remove this after testing
+if (experiment_name == "test"):
+    os.rmdir("experiments/" + experiment_name)
