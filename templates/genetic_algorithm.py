@@ -123,9 +123,6 @@ OUTPUT_FILE = config.get("PARAMETERS", "OUTPUT_FILE") + ".csv"
 SEED = int(config.get("PARAMETERS", "SEED"), base = 16)
 POPULATION_SIZE = config.getint("PARAMETERS", "POPULATION_SIZE")
 
-# TODO Remove debug statement below
-print(OUTPUT_FILE)
-
 ## Set up fitness function ##
 PROBABALISTIC_FITNESS_FUNCTION = config.getboolean(
     "OPTIONS",
