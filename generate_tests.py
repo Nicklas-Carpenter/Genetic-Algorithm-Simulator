@@ -19,15 +19,21 @@ import argparse
 import os
 import sys
 
-def generate_configuration_file(test_number):
+# TODO Maybe use os.tempfile() for the tempfile
+# TODO Change interative mode to script mode. Scripts should be user runnable
+#      by default
+# TODO Improve error handling
+# Improve variable names
+
+def generate_configuration_file(test_number, name, tmp_file = None):
     try:
         config_file = open("{0}{1}.ini".format(name, test_number), mode = "w")
         config.write(config_file)
         if args.generate_temporary_files:
             try:
-                created_files.write("test{0}.ini\n".format(test_number))
+                tmp_file.write("{0}{1}.ini\n".format(name, test_number))
             except:
-                created_files.close()
+                tmp_file.close()
                 print("Error writing to file list", file = sys.stderr)
                 exit()
     except:
@@ -38,6 +44,8 @@ def generate_configuration_file(test_number):
 
 
 #### Main ####
+number_of_tests = 0
+
 parser = argparse.ArgumentParser()
 specifies_number_of_tests = parser.add_mutually_exclusive_group()
 
@@ -61,13 +69,12 @@ parser.add_argument("-t", "--generate-temporary-files", action = "store_true")
 args = parser.parse_args()
 
 try:
-    config_file = open("default.ini")
+    config_file = open("../../templates/default.ini")
     config = configparser.ConfigParser()
     config.read_file(config_file)
-except (FileNotFoundError, FileExistsError) as e:
+except OSError:
     print("Error reading config file", file = sys.stderr)
-finally:
-    config_file.close()
+    exit(-1)
 
 if args.number_of_tests > 0:
     number_of_tests = args.number_of_tests
@@ -88,22 +95,24 @@ else:
                 print(
                     "Invalid number of tests: ", number_of_tests, 
                     file = sys.stderr)
-
-if args.generate_temporary_files:
-    try:
-        created_files = open("created_files.tmp", mode="w")
-    except:
-        print("Error when attempting to create file list", file = sys.stderr)
-        exit()
+    else:
+        number_of_tests = 1
 
 name = input("Base config file name: ")
 if len(name) == 0:
-    name = "test"
+    name = "test" # TODO Change this to error handling after testing
+
+created_files = 0
+if args.generate_temporary_files:
+    created_files = open("created_files.tmp", "w", newline="")
 
 if args.use_defaults:
     for test in range(number_of_tests):
         config.set("PARAMETERS", "OUTPUT_FILE", "test{0}".format(test))
-        generate_configuration_file(test)
+        if args.generate_temporary_files:
+            generate_configuration_file(test, name, tmp_file = created_files)
+        else:
+            generate_configuration_file(test, name)
 elif args.make_statistical_plot:
     # print("Creating test configuration file")
     for pair in config.items():
@@ -115,7 +124,10 @@ elif args.make_statistical_plot:
     for test in range(number_of_tests):
         config.set("PARAMETERS", "SEED", str(test))
         config.set("PARAMETERS", "OUTPUT_FILE", "{0}{1}".format(name, test))
-        generate_configuration_file(test)
+        if args.generate_temporary_files:
+            generate_configuration_file(test, name, tmp_file = created_files)
+        else:
+            generate_configuration_file(test, name)
 else:
     for test in range(number_of_tests):
         for pair in config.items():
@@ -125,7 +137,10 @@ else:
                 new_value = input(kv[0], "(default: ", kv[1], "): ")
                 config.set(section, new_value)
         config.set("PARAMETERS", "OUTPUT_FILE", "{0}{1}".format(name, test))
-        generate_configuration_file(test)
+        if args.generate_temporary_files:
+            generate_configuration_file(test, name, tmp_file = created_files)
+        else:
+            generate_configuration_file(test, name)
 
 if args.generate_temporary_files:
     created_files.close()

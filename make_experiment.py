@@ -19,18 +19,65 @@ import argparse
 import os
 import sys
 import subprocess
+import shutil
+
+# TODO Maybe use os.tempfile() for the tempfile
+# TODO Refactor starting with variable names
+# TODO Improve clean-up on failure
+# TODO Improve error handling
+
+run_script_imports = ["subprocess", "sys"]
 
 run_cmd = """\
+
 try:
-    subprocess.run('python genetic_algorithm.py {0}', check = True)
-execpt: subprocess.CalledProcessError:
-    print("Error running genetic_algorithm.py", file=sys.stderr)"""
+    subprocess.run(["python3", "genetic_algorithm.py", "{0}"], check = True)
+except subprocess.CalledProcessError:
+    print("Error running genetic_algorithm.py", file = sys.stderr)
+"""
 
 plot_cmd = """\
 try:
-    subprocess.run("python plot.py", check=True)
+    subprocess.run(["python3", "plot.py"], check=True)
 except subprocess.CalledProcessError:
-    print("Error running plot.py", file=sys.stderr)"""
+    print("Error running plot.py", file = sys.stderr)
+"""
+
+plot_script_imports = [
+    "matplotlib.pyplot as plt",
+    "csv",
+    "os"
+]
+
+plot_script_body = """
+
+generations = []
+best = []
+average = []
+mins = []
+
+# Obtain the data from file
+csvfile = open(data, "r", newline="")
+reader = csv.DictReader(csvfile)
+for row in reader:
+    generations.append( row["generation"] )
+    best.append( int(row["max"] ) )
+    average.append( int(row["average"] ))
+    mins.append( int(row["min"] ))
+        
+# Plot each set of data points: best, average, and min
+plt.plot(generations, best, label = "best")
+plt.plot(generations, average, label = "average")
+plt.plot(generations, mins, label = "min")
+
+# Add a legend
+plt.legend()
+
+# Add axis lables
+plt.xlabel("generations")
+plt.ylabel("fitness")
+
+"""
 
 # TODO Remove this after testing
 experiment_name = ""
@@ -62,6 +109,7 @@ while input_not_valid:
     experiment_name = input("Experiment name: ")
     try:
         os.mkdir("experiments/" + experiment_name)
+        os.chdir("experiments/" + experiment_name)
         input_not_valid = False
     except FileExistsError:
         print(
@@ -89,54 +137,86 @@ else:
             input_not_valid = False
         except ValueError:
             print(
-                  "Invalid number of tests: ", number_of_tests, 
-                  file = sys.stderr)
+                "Invalid number of tests: ", number_of_tests, 
+                file = sys.stderr
+            )
 
 ### Generate the test configuration files ###
 
 ## Build the argument string ##
-arguments = "-t"
+arg_vector = ["-t"]
 if args.use_defaults:
-    arguments += "-d "
+    arg_vector.append("-d")
 if args.make_statistical_plot > 0:
-    arguments += "-s {0}".format(args.make_statistical_plot)
-elif args.number_of_tests > 0:
-    arguments += "-n {0}".format(args.number_of_tests)
+    arg_vector.append("-s {0}".format(args.make_statistical_plot))
+elif number_of_tests > 1:
+    arg_vector.append("-n {0}".format(number_of_tests))
 
 
 ## Run the generate_tests.py script ##
 try:
-    subprocess.run("python generate_tests.py " + arguments)
-except subprocess.CalledProcessError:
+    subprocess.run(["python3", "../../generate_tests.py"] + arg_vector)
+except (subprocess.CalledProcessError, OSError): 
     print("Error attempting to generate tests", file = sys.stderr)
+    os.rmdir(test_name)
     exit()
 
-### Build a runscript ###
+### Build a run_script ###
 try:
-    runscript = open("run.py", mode = "w")
+    run_script = open("run.py", mode = "w")
 except:
-    print("Error attempting to generate runscript", file = sys.stderr)
+    print("Error attempting to generate run_script", file = sys.stderr)
+    exit()
 
-runscript.write("import subprocess\nimport sys")
+for imprt in run_script_imports:
+    run_script.write("import {0}\n".format(imprt))
 
 try:
     tests = open("created_files.tmp", mode = "r")
 except:
     print("Error opening list of files", file = sys.stderr)
+    exit()
 
-test_file = tests.readline()
-while len(test_file) > 0:
-    runscript.write("# Running {0}".format(test_file))
-    runscript.write(run_cmd.format(test_file))
-    test_file = tests.readline()
+test = tests.readline()
+while len(test) > 0:
+    data_file_name = test.split(".")[0].strip("\n")
+    run_script.write("\n# Running {0}".format(data_file_name))
+    run_script.write(run_cmd.format(test.strip("\n")))
+    test = tests.readline()
 
-runscript.write("\n" + plot_cmd)
-runscript.close()
+run_script.write("\n#Plotting graphs\n" + plot_cmd)
+run_script.close()
 
 ### Generate plot script ###
-plot_script = open("plot.py", "w", newline='')
-plot_script.write("import matplotlib.pyplot as plt\nimport csv\nimport os")
+plot_script = open("plot.py", "w", newline="")
 
-# TODO Remove this after testing
-if (experiment_name == "test"):
-    os.rmdir("experiments/" + experiment_name)
+for imprt in plot_script_imports:
+    plot_script.write("import " + imprt + "\n")
+
+tests.seek(0)
+test = tests.readline()
+fig_num = 1
+while len(test) > 0:
+    data_file_name = test.split(".")[0].strip("\n")
+    plot_script.write("\n# Plotting {0}\n".format(data_file_name))
+    plot_script.write("plt.figure({0})\n\n".format(fig_num))
+    fig_num += 1
+    plot_script.write("# Obtain the data from file\n")
+    plot_script.write("data = \"{0}.csv\"".format(data_file_name))
+    plot_script.write(plot_script_body)
+    plot_script.write("# Save the figure to a file\n")
+    plot_script.write("plt.savefig(\"{0}.png\")\n".format(data_file_name))
+    test = tests.readline()
+
+plot_script.write("# Display the plot\nplt.show()")
+plot_script.close()
+
+tests.close()
+
+# Give the experiment a copy of genetic_algorithm, Bitstring, and probability
+shutil.copy("../../templates/genetic_algorithm.py", "./")
+shutil.copy("../../templates/Bitstring.py", "./")
+shutil.copy("../../templates/probability.py", "./")
+
+# Delete the temp file
+os.remove("created_files.tmp")
