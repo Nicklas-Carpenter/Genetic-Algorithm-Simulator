@@ -16,13 +16,16 @@
 
 import math
 import csv
-import random
 import configparser
 import argparse
 import probability
 import numpy as np
 
 from Bitstring import Bitstring
+from random import random, randint, seed
+from multiprocessing import Process
+from multiprocessing.sharedctypes import Array
+from multiprocessing.managers import SharedMemoryManager
 
 # TODO Consider Selection
 #   - Proportional to fitness
@@ -32,57 +35,128 @@ from Bitstring import Bitstring
 # TODO Consider step fitness function with cutoff
 # Step-function cut-off
 
+# TODO Store fitness ina seperate array
+
 FIELD_NAMES = ["generation", "max", "average", "min", "best"]
 
+N = 1000
 
-W_TARGET = np.pi
+TARGET_W = np.pi
+TARGET = []
+SINUSOIDS = []
 
-population = []
+BITSTRING = []
 
-def gene_comparative_fitness_func(genes):
+def fitness_func(index, genes, fitness, sinusoids, target):
     '''Function used to measure the fitness of a new generation'''
+    
+    error = 1.0
 
-    fitness = 0
+    x = np.zeros(N)
 
-    for i in range(len(genes)):
-        if genes[i] == 1:
-            fitness += 1
+    for i, gene in enumerate(genes):
+        x += gene * sinusoids[i]
+    
+    for i in range(N):
+        expected = target[i]
 
-    if PROBABALISTIC_FITNESS_FUNCTION:
-        noise = -1
-        while noise > 1 or noise < 0:
-            noise = NOISE()
-        return fitness * noise
+        actual = x[i]
+        error += np.fabs(expected - actual)
 
-    return fitness
+    fitness[index] = 1.0 / error
+
+
+def calculate_fitness():
+    processes = []
+    fitnesses = Array("f", POPULATION_SIZE)
+
+    for index, individual in enumerate(BITSTRING):
+        process = Process(
+            target = fitness_func, 
+            args = (
+                index, individual.get_bitstring(), 
+                fitnesses,
+                SINUSOIDS,
+                TARGET
+            ) 
+        )
+
+        process.start()
+        processes.append(process)
+
+    for index, individual in enumerate(BITSTRING):
+        processes[index].join()
+        individual.fitness = fitnesses[index]
+
+
+
+# Bitstring size + 1 since we are ignoring w = w_target
+def generate_sinusoids():
+    smm = SharedMemoryManager()
+    smm.start()
+
+    W = []
+    increment = 1.5 / (BITSTRING_SIZE + 1) 
+
+    t = np.linspace(0, (4 * np.pi) / TARGET_W, N)
+
+    for i in range(BITSTRING_SIZE + 1):
+        if (0.5 + i * increment) == 1:
+            continue
+
+        w = TARGET_W / (0.5 + i * increment)
+        W.append(w)
+        SINUSOIDS.append(0.25 * np.cos(w * t))
+    
+    TARGET = np.cos(TARGET_W * t)
+
+
+    w_list = ""
+    freqs = open("frequencies.ini", "w")
+    for i in range(BITSTRING_SIZE):
+        w_list += str(W[i]) + ","
+
+    w_list = w_list[0: len(w_list) - 2]
+
+    records = {
+        "DEFAULT": {
+            "frequencies": str(w_list),
+            "target": TARGET_W
+        }
+    }
+
+    record = configparser.ConfigParser()
+    record.read_dict(records)
+    record.write(freqs)
+
+    freqs.close()
+
 
 def generate_initial_population():
     '''Establishes the initialize bitstring population by generation of random
     bitstrings'''
 
     for i in range(POPULATION_SIZE):
-        population.append(Bitstring(BITSTRING_SIZE, FITNESS_FUNCTION))
+        BITSTRING.append(Bitstring(BITSTRING_SIZE))
 
 def repopulate():
     '''Function used to generate a new generation'''
 
-    for i in range(math.ceil(POPULATION_SIZE * REPOPULATION_RATIO)):
+    elite_end = math.ceil(POPULATION_SIZE * REPOPULATION_RATIO) - 1
+
+    for i in range(elite_end + 1, len(BITSTRING)):
         if CROSSOVER:
-            population[POPULATION_SIZE - i - 1] = Bitstring.crossover(
-                population[random.randint(
-                    0, 
-                    POPULATION_SIZE * REPOPULATION_RATIO
-                )],
-                population[random.randint(
-                    0, 
-                    POPULATION_SIZE * REPOPULATION_RATIO
-                )],
+            BITSTRING[i] = Bitstring.crossover(
+                BITSTRING[randint(0, elite_end)],
+                BITSTRING[randint(0, elite_end)]
             )
+            
         if MUTATE:
-            population[POPULATION_SIZE - i - 1].mutate()
+            BITSTRING[i].mutate()
 
 def fitness_comparator(phenotype):
-    return MAX_FITNESS - phenotype.get_current_fitness()
+    return phenotype.fitness
+
 
 def get_average_fiteness():
     '''Finds the average fitness of the population'''
@@ -90,9 +164,9 @@ def get_average_fiteness():
     cumulative_fitness = 0
 
     for i in range(POPULATION_SIZE):
-        cumulative_fitness += population[i].get_current_fitness()
+        cumulative_fitness += BITSTRING[i].fitness
     
-    return math.floor(cumulative_fitness / POPULATION_SIZE)
+    return cumulative_fitness / POPULATION_SIZE
 
 def make_generation_summary(writer, generation):
     '''Generate an statistics summary for the current bitstream generation'''
@@ -100,10 +174,10 @@ def make_generation_summary(writer, generation):
     # TODO Format for PEP8
     writer.writerow({
         "generation": generation,
-        "max": population[0].get_current_fitness(),
+        "max": BITSTRING[0].fitness,
         "average": get_average_fiteness(),
-        "min": population[POPULATION_SIZE - 1].get_current_fitness(),
-        "best": population[0].get_bitstring()
+        "min": BITSTRING[POPULATION_SIZE - 1].fitness,
+        "best": BITSTRING[0].get_bitstring()
     })
 
 
@@ -133,36 +207,8 @@ PROBABALISTIC_FITNESS_FUNCTION = config.getboolean(
     "PROBABALISTIC_FITNESS_FUNCTION"
 )
 
-fitness_function = config.get("PARAMETERS", "FITNESS_FUNCTION")
-if fitness_function == "GENE_COMPARATIVE":
-    FITNESS_FUNCTION = gene_comparative_fitness_func
-    MAX_FITNESS = BITSTRING_SIZE
-elif fitness_function == "GRADE_SQUARED":
-    MAX_FITNESS = 1.0
-else:
-    exit() # TODO Throw an error
-
 CROSSOVER = config.getboolean("OPTIONS", "CROSSOVER")
 MUTATE = config.getboolean("OPTIONS", "MUTATE")
-# TODO Incorporate average fitness functionality
-USE_AVERAGE_FITNESS = config.getboolean("OPTIONS", "USE_AVERAGE_FITNESS")
-
-## Configure possibility of random elements in fitness ##
-if config.getboolean("OPTIONS", "PROBABALISTIC_FITNESS_FUNCTION"):
-    distribution = config.get("PARAMETERS", "PROBABILITY_DISTRIBUTION")
-    if distribution == "UNIFORM":
-        a = config.getfloat("UNIFORM", "A")
-        b = config.getfloat("UNIFORM", "B")
-        NOISE = probability.create_uniform_generator(a, b)
-    elif distribution == "NORMAL":
-        lam = config.getfloat("EXPONENTIAL", "LAMBDA")
-        NOISE = probability.create_exponential_generator(lam)
-    elif distribution == "EXPONENTIAL":
-        mu = config.getfloat("GAUSS", "MU")
-        sigma = config.getfloat("GAUSS", "SIGMA")
-        NOISE = probability.create_gauss_generator(mu, sigma)
-    else:
-        exit() # TODO: Throw an error
 
 ## Determine repopulation method ##
 # TODO Implement microbial genetic algorithm
@@ -177,18 +223,23 @@ else:
 config_file.close()
 
 ### Genetic Algorithm ### 
-random.seed(SEED)
+seed(SEED)
 generation = 0
 
+generate_sinusoids()
 generate_initial_population()
 
-summary_file = open(OUTPUT_FILE, mode = 'w', newline = '')
-writer = csv.DictWriter(summary_file, fieldnames=FIELD_NAMES)
+summary_file = open(OUTPUT_FILE, mode = "w", newline = "")
+writer = csv.DictWriter(summary_file, fieldnames = FIELD_NAMES)
 writer.writeheader()
 
-while (generation < MAX_GENERATIONS) and (population[0].get_current_fitness() < MAX_FITNESS):
-    repopulate()
-    population = sorted(population, key=fitness_comparator)
+while (generation < MAX_GENERATIONS):
+    print("Generation {0}".format(generation))
+    calculate_fitness()
     make_generation_summary(writer, generation)
+    BITSTRING.sort(key = fitness_comparator, reverse = True)
     generation += 1
+    repopulate()
+    
 summary_file.close()
+
